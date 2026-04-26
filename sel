@@ -1,0 +1,10 @@
+*&---------------------------------------------------------------------*
+*& Include          ZPRG_RPT_PR_GRN_SEL
+*&---------------------------------------------------------------------*
+
+SELECTION-SCREEN BEGIN OF BLOCK b1.
+  SELECT-OPTIONS : s_badat FOR eban-badat OBLIGATORY,
+                   s_banfn FOR eban-banfn,
+                   s_ebeln FOR ekko-ebeln,
+                   s_matnr FOR eban-matnr.
+SELECTION-SCREEN END OF BLOCK b1.
