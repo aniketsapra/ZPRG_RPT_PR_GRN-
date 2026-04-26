@@ -1,0 +1,100 @@
+*&---------------------------------------------------------------------*
+*& Report ZPRG_RPT_PR_GRN
+*&---------------------------------------------------------------------*
+*&
+*&---------------------------------------------------------------------*
+REPORT zprg_rpt_pr_grn.
+
+TABLES : eban, mara, ekko, ekpo, mseg, zdb_tb_pr_grn.
+
+INCLUDE zprg_rpt_pr_grn_top.
+INCLUDE zprg_rpt_pr_grn_sel.
+INCLUDE zprg_rpt_pr_grn_fetch.
+
+
+START-OF-SELECTION.
+  PERFORM get_data.
+  PERFORM call_screen.
+*  PERFORM add_fieldcat.
+*  PERFORM display_alv.
+
+
+FORM call_screen.
+  CALL SCREEN 0100.
+ENDFORM.
+
+MODULE status_pf OUTPUT.
+  SET PF-STATUS 'STANDARD'.
+  SET TITLEBAR 'ZTITLE'.
+  PERFORM display_alv.
+ENDMODULE.
+
+MODULE user_command_0100 INPUT.
+  PERFORM user_command USING sy-ucomm.
+ENDMODULE.
+
+FORM user_command USING p_ucomm TYPE sy-ucomm.
+
+  CASE p_ucomm.
+    WHEN 'BACK' OR 'EXIT' OR 'CANCEL'.
+      LEAVE PROGRAM.
+    WHEN '&DATA_SAVE'.
+      PERFORM save_data.
+    WHEN '&EDIT'.
+      IF gv_edit_mode = abap_false.
+
+        gv_edit_mode = abap_true.
+
+        CALL METHOD go_alv->set_ready_for_input
+          EXPORTING
+            i_ready_for_input = 1.
+
+      ELSE.
+
+        gv_edit_mode = abap_false.
+
+        CALL METHOD go_alv->set_ready_for_input
+          EXPORTING
+            i_ready_for_input = 0.
+      ENDIF.
+*    WHEN '&EDIT'.
+*
+*      LOOP AT it_fieldcat INTO wa_fieldcat.
+*
+*        IF wa_fieldcat-fieldname = 'CHANGE_ETA'
+*        OR wa_fieldcat-fieldname = 'PENDING_ETA'
+*        OR wa_fieldcat-fieldname = 'REMARKS'
+*        OR wa_fieldcat-fieldname = 'TECH_SPECS1'
+*        OR wa_fieldcat-fieldname = 'TECH_SPECS2'.
+*
+*          IF gv_edit_mode = abap_false.
+*            wa_fieldcat-edit = 'X'.   " enable edit
+*          ELSE.
+*            wa_fieldcat-edit = ''.    " disable edit
+*          ENDIF.
+*
+*        ELSE.
+*          wa_fieldcat-edit = ''.      " always display only
+*        ENDIF.
+*
+*        MODIFY it_fieldcat FROM wa_fieldcat.
+*
+*      ENDLOOP.
+*
+*      " Toggle flag
+*      IF gv_edit_mode = abap_false.
+*        gv_edit_mode = abap_true.
+*      ELSE.
+*        gv_edit_mode = abap_false.
+*      ENDIF.
+*
+*      " Refresh ALV with new field catalog
+*      CALL METHOD go_alv->set_frontend_fieldcatalog
+*        EXPORTING
+*          it_fieldcatalog = it_fieldcat.
+*
+*      CALL METHOD go_alv->refresh_table_display.
+
+  ENDCASE.
+
+ENDFORM.
