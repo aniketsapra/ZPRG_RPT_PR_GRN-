@@ -1,0 +1,377 @@
+*&---------------------------------------------------------------------*
+*& Include          ZPRG_RPT_PR_GRN_FETCH
+*&---------------------------------------------------------------------*
+
+FORM get_data.
+
+  SELECT
+     eban~banfn,
+     eban~bnfpo,
+     eban~afnam,
+     eban~werks,
+     eban~matnr,
+     eban~txz01,
+     eban~menge,
+     eban~meins,
+     eban~badat,
+     eban~frgdt,
+     eban~erdat,
+
+     ekpo~ebeln,
+     ekpo~ebelp,
+     ekpo~bukrs,
+
+     ekko~bedat,
+     ekko~lifnr
+
+  INTO TABLE @DATA(it_main)
+
+  FROM eban
+  LEFT JOIN ekpo
+   ON ekpo~banfn = eban~banfn
+  AND ekpo~bnfpo = eban~bnfpo
+
+  LEFT JOIN ekko
+   ON ekko~ebeln = ekpo~ebeln
+
+  WHERE eban~banfn IN @s_banfn
+  AND eban~badat IN @s_badat
+  AND eban~matnr IN @s_matnr
+  AND ekko~ebeln IN @s_ebeln.
+
+
+  SELECT matnr, mtart INTO TABLE @DATA(it_mara)
+    FROM mara
+    FOR ALL ENTRIES IN @it_main
+  WHERE matnr = @it_main-matnr.
+
+  SELECT ebeln, ebelp, anln1 INTO TABLE @DATA(it_ekkn)
+    FROM ekkn
+    FOR ALL ENTRIES IN @it_main
+    WHERE ebeln = @it_main-ebeln
+  AND ebelp = @it_main-ebelp.
+
+  SELECT bukrs, anln1, txt50 INTO TABLE @DATA(it_anla)
+    FROM anla
+    FOR ALL ENTRIES IN @it_ekkn
+  WHERE anln1 = @it_ekkn-anln1.
+
+  SELECT bukrs, anln1, kostl INTO TABLE @DATA(it_anlz)
+    FROM anlz
+    FOR ALL ENTRIES IN @it_ekkn
+  WHERE anln1 = @it_ekkn-anln1.
+
+  SELECT kostl, ktext INTO TABLE @DATA(it_cskt)
+    FROM cskt
+    FOR ALL ENTRIES IN @it_anlz
+    WHERE kostl = @it_anlz-kostl
+  AND spras = 'E'.
+
+  SELECT ebeln, ebelp, eindt INTO TABLE @DATA(it_eket)
+    FROM eket
+    FOR ALL ENTRIES IN @it_main
+    WHERE ebeln = @it_main-ebeln
+  AND ebelp = @it_main-ebelp.
+
+  SELECT mseg~ebeln,
+         mseg~ebelp,
+         mseg~menge,
+         mkpf~budat
+    INTO TABLE @DATA(it_grn)
+    FROM mseg
+    INNER JOIN mkpf
+      ON mkpf~mblnr = mseg~mblnr
+    FOR ALL ENTRIES IN @it_main
+    WHERE mseg~ebeln = @it_main-ebeln
+  AND mseg~ebelp = @it_main-ebelp.
+
+  SELECT banfn,
+       bnfpo,
+       change_eta,
+       pending_eta,
+       remarks,
+       tech_specs1,
+       tech_specs2
+  INTO TABLE @DATA(it_zdata)
+  FROM zdb_tb_pr_grn
+  FOR ALL ENTRIES IN @it_main
+  WHERE banfn = @it_main-banfn
+    AND bnfpo = @it_main-bnfpo.
+*end-of-SELECTION.
+
+  LOOP AT it_main INTO DATA(wa_main).
+
+    CLEAR wa_final.
+
+*--- Basic PR Data
+    wa_final-banfn = wa_main-banfn.
+    wa_final-bnfpo = wa_main-bnfpo.
+    wa_final-afnam = wa_main-afnam.
+    wa_final-werks = wa_main-werks.
+    wa_final-txz01 = wa_main-txz01.
+    wa_final-eban_menge = wa_main-menge.
+    wa_final-meins = wa_main-meins.
+    wa_final-badat = wa_main-badat.
+    wa_final-frgdt = wa_main-frgdt.
+    wa_final-erdat = wa_main-erdat.
+
+*--- PO Data
+    wa_final-ebeln = wa_main-ebeln.
+    wa_final-bedat = wa_main-bedat.
+    wa_final-lifnr = wa_main-lifnr.
+
+*---conv_time
+    IF wa_main-erdat IS NOT INITIAL AND wa_main-bedat IS NOT INITIAL.
+      wa_final-ct_prpo = wa_main-erdat - wa_main-bedat.
+    ENDIF.
+
+*--- Material Type
+    READ TABLE it_mara INTO DATA(wa_mara)
+         WITH KEY matnr = wa_main-matnr.
+    IF sy-subrc = 0.
+      wa_final-mtart = wa_mara-mtart.
+    ENDIF.
+
+*--- Asset Number
+    READ TABLE it_ekkn INTO DATA(wa_ekkn)
+         WITH KEY ebeln = wa_main-ebeln
+                  ebelp = wa_main-ebelp.
+
+    IF sy-subrc = 0.
+      wa_final-anln1 = wa_ekkn-anln1.
+
+*--- Asset Description
+      READ TABLE it_anla INTO DATA(wa_anla)
+           WITH KEY anln1 = wa_ekkn-anln1.
+      IF sy-subrc = 0.
+        wa_final-txt50 = wa_anla-txt50.
+      ENDIF.
+
+*--- Cost Center
+      READ TABLE it_anlz INTO DATA(wa_anlz)
+           WITH KEY anln1 = wa_ekkn-anln1.
+      IF sy-subrc = 0.
+        wa_final-kostl = wa_anlz-kostl.
+
+        READ TABLE it_cskt INTO DATA(wa_cskt)
+             WITH KEY kostl = wa_anlz-kostl.
+        IF sy-subrc = 0.
+          wa_final-ktext = wa_cskt-ktext.
+        ENDIF.
+      ENDIF.
+    ENDIF.
+
+*--- Delivery Date
+    READ TABLE it_eket INTO DATA(wa_eket)
+         WITH KEY ebeln = wa_main-ebeln
+                  ebelp = wa_main-ebelp.
+    IF sy-subrc = 0.
+      wa_final-eindt = wa_eket-eindt.
+    ENDIF.
+
+*--- PO TO GRN Conversion  TIME (Days)
+
+    IF wa_final-budat_mkpf  IS NOT INITIAL AND wa_final-bedat IS NOT INITIAL.
+      wa_final-ct_pogrn = wa_final-budat_mkpf - wa_final-bedat.
+    ENDIF.
+
+*--- GRN Data
+    READ TABLE it_grn INTO DATA(wa_grn)
+         WITH KEY ebeln = wa_main-ebeln
+                  ebelp = wa_main-ebelp.
+    IF sy-subrc = 0.
+      wa_final-budat_mkpf = wa_grn-budat.
+      wa_final-mseg_menge = wa_grn-menge.
+    ENDIF.
+
+*--- Open PO Item Qty
+    IF wa_final-eban_menge IS NOT INITIAL AND wa_final-mseg_menge IS NOT INITIAL.
+      wa_final-open_qty = wa_final-eban_menge - wa_final-mseg_menge.
+    ENDIF.
+
+*--- Ageing Report wrf to PR to Present Date  Conversion days from PR to present date
+    IF wa_main-erdat IS NOT INITIAL.
+      wa_final-ct_prpr = sy-datum - wa_main-erdat.
+    ENDIF.
+
+    READ TABLE it_zdata INTO DATA(wa_zdata)
+     WITH KEY banfn = wa_main-banfn
+              bnfpo = wa_main-bnfpo.
+
+    IF sy-subrc = 0.
+
+      wa_final-change_eta  = wa_zdata-change_eta.
+      wa_final-pending_eta = wa_zdata-pending_eta.
+      wa_final-remarks     = wa_zdata-remarks.
+      wa_final-tech_specs1 = wa_zdata-tech_specs1.
+      wa_final-tech_specs2 = wa_zdata-tech_specs2.
+
+    ENDIF.
+
+    APPEND wa_final TO it_final.
+
+  ENDLOOP.
+
+ENDFORM.
+
+FORM add_fieldcat.
+
+  DEFINE add_fcat.
+    CLEAR wa_fieldcat.
+    wa_fieldcat-fieldname = &1.
+    wa_fieldcat-coltext   = &2.
+    wa_fieldcat-col_opt = 'X'.
+    APPEND wa_fieldcat TO it_fieldcat.
+  END-OF-DEFINITION.
+
+  CLEAR wa_fieldcat.
+  wa_fieldcat-fieldname = 'SEL'.
+  wa_fieldcat-coltext   = 'Select'.
+  wa_fieldcat-checkbox  = 'X'.
+  wa_fieldcat-edit      = 'X'.
+  APPEND wa_fieldcat TO it_fieldcat.
+
+  add_fcat 'AFNAM'        'Purchase Requisitionor'          .
+  add_fcat 'WERKS'        'Plant'                           .
+  add_fcat 'MTART'        'Material Type'                   .
+  add_fcat 'ANLN1'        'PO Asset No.'                    .
+  add_fcat 'TXT50'        'ASSET/ Equipment  Description'   .
+  add_fcat 'KOSTL'        'PO Cost Center No.'              .
+  add_fcat 'KTEXT'        'Cost Center Description'         .
+  add_fcat 'BANFN'        'PR Number'                       .
+  add_fcat 'BADAT'        'PR Raise Date'                   .
+  add_fcat 'FRGDT'        'PR Release Date'                .
+  add_fcat 'ERDAT'        'PR Change Date'                 .
+  add_fcat 'BNFPO'        'LINE ITEM Code'                 .
+  add_fcat 'TXZ01'        'Description of Item'            .
+  add_fcat 'EBAN_MENGE'   'Qty'                            .
+  add_fcat 'MEINS'        'UOM'                            .
+  add_fcat 'CT_PRPO'      'PR TO PO Conversion TIME(Days)' .
+  add_fcat 'EBELN'        'PO No.'                         .
+  add_fcat 'BEDAT'        'PO Date'                        .
+  add_fcat 'LIFNR'        'Vendor Name'                    .
+  add_fcat 'EINDT'        'Delivery Date (From PO)'        .
+*  add_fcat 'CHANGE_ETA'   'Changed ETA'.                      "Change in delivery
+
+  PERFORM add_edit_field USING 'CHANGE_ETA'  'Changed ETA'.
+
+  add_fcat 'CT_POGRN'     'PO TO GRN Conversion TIME (Days)' .
+  add_fcat 'BUDAT_MKPF'   'Created On GRN Date'            .
+  add_fcat 'MSEG_MENGE'   'GRN Qty'                        .
+  add_fcat 'OPEN_QTY'     'Open PO Item Qty'               .
+*  add_fcat 'PENDING_ETA'   'Pending ETA'.                     "Pending Qty delivery
+*  add_fcat 'REMARKS'       'Remarks'.                         "remarks
+*  add_fcat 'TECH_SPECS1'   'Tech Spec Provided'.              "provide on date
+*  add_fcat 'TECH_SPECS2'   'Tech Spec Approved'.              "approved on date
+
+
+  PERFORM add_edit_field USING 'PENDING_ETA' 'Pending ETA'.
+  PERFORM add_edit_field USING 'REMARKS'     'Remarks'.
+  PERFORM add_edit_field USING 'TECH_SPECS1' 'Tech Spec Provided'.
+  PERFORM add_edit_field USING 'TECH_SPECS2' 'Tech Spec Approved'.
+
+  add_fcat 'CT_PRPR'      'Ageing Report wrf to PR to Present Date' .
+
+
+
+ENDFORM.
+
+FORM add_edit_field USING p_field p_text.
+
+  CLEAR wa_fieldcat.
+  wa_fieldcat-fieldname = p_field.
+  wa_fieldcat-coltext   = p_text.
+  wa_fieldcat-edit      = 'X'.   " editable column
+  APPEND wa_fieldcat TO it_fieldcat.
+
+ENDFORM.
+
+FORM save_data.
+
+  CALL METHOD go_alv->check_changed_data.
+
+  DATA: wa_data   TYPE ty_final,
+        wa_db     TYPE zdb_tb_pr_grn,
+        lv_exists TYPE abap_bool.
+
+  LOOP AT it_final INTO wa_data WHERE sel = 'X'.
+
+    IF wa_data-change_eta IS INITIAL AND
+       wa_data-pending_eta IS INITIAL AND
+       wa_data-tech_specs1 IS INITIAL AND
+       wa_data-tech_specs2 IS INITIAL AND
+       wa_data-remarks IS INITIAL.
+
+      CONTINUE.
+
+    ENDIF.
+
+    CLEAR: wa_db, lv_exists.
+
+    wa_db-banfn = wa_data-banfn.
+    wa_db-bnfpo = wa_data-bnfpo.
+    wa_db-change_eta = wa_data-change_eta.
+    wa_db-pending_eta = wa_data-pending_eta.
+    wa_db-remarks = wa_data-remarks.
+    wa_db-tech_specs1 = wa_data-tech_specs1.
+    wa_db-tech_specs2 = wa_data-tech_specs2.
+
+    "checking if record already exists
+    SELECT SINGLE @abap_true INTO @lv_exists FROM zdb_tb_pr_grn WHERE banfn = @wa_db-banfn
+                                                                 AND bnfpo = @wa_db-bnfpo.
+
+    IF lv_exists = abap_true.
+      UPDATE zdb_tb_pr_grn
+        SET change_eta = @wa_data-change_eta,
+            pending_eta = @wa_data-pending_eta,
+            remarks = @wa_data-remarks,
+            tech_specs1 = @wa_data-tech_specs1,
+            tech_specs2 = @wa_data-tech_specs2
+        WHERE banfn = @wa_db-banfn
+        AND bnfpo = @wa_db-bnfpo.
+    ELSE.
+      INSERT zdb_tb_pr_grn FROM wa_db.
+    ENDIF.
+
+  ENDLOOP.
+
+  IF sy-subrc <> 0.
+    MESSAGE 'No Checkbox Selected' TYPE 'E'.
+  ENDIF.
+
+  COMMIT WORK.
+  MESSAGE 'Selected row changes saved successfully' TYPE 'S'.
+
+ENDFORM.
+
+
+FORM display_alv.
+
+  IF go_alv IS INITIAL.
+    CREATE OBJECT go_container
+      EXPORTING
+        container_name = 'CC_ALV'.
+
+    CREATE OBJECT go_alv
+      EXPORTING
+        i_parent = go_container.
+
+    PERFORM add_fieldcat.
+    wa_layout-zebra = 'X'.
+*    wa_layout-edit  = 'X'.
+
+    CALL METHOD go_alv->set_table_for_first_display
+      EXPORTING
+        is_layout       = wa_layout
+      CHANGING
+        it_outtab       = it_final
+        it_fieldcatalog = it_fieldcat.
+
+    " Initially display mode (not editable)
+    CALL METHOD go_alv->set_ready_for_input
+      EXPORTING
+        i_ready_for_input = 0.
+
+  ENDIF.
+
+ENDFORM.
