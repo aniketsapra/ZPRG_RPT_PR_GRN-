@@ -1,0 +1,50 @@
+*&---------------------------------------------------------------------*
+*& Include          ZPRG_RPT_PR_GRN_TOP
+*&---------------------------------------------------------------------*
+
+TYPES : BEGIN OF ty_final,
+          sel         TYPE c LENGTH 1,
+          afnam       TYPE afnam,
+          werks       TYPE ewerk,
+          mtart       TYPE mtart,
+          anln1       TYPE anln1,
+          txt50       TYPE txa50_anlt,
+          kostl       TYPE kostl,
+          ktext       TYPE ktext,
+          banfn       TYPE banfn,
+          badat       TYPE badat,
+          frgdt       TYPE frgdt,
+          erdat       TYPE erdat,
+          bnfpo       TYPE bnfpo,
+          txz01	      TYPE txz01,
+          eban_menge  TYPE bamng,
+          meins	      TYPE bamei,
+          ct_prpo     TYPE i,             "PR TO PO Conversion  TIME (Days)
+          change_eta  TYPE char10,        "Change in delivery (From the purchaser to enter the new ETA through the Form )
+          ebeln       TYPE bstnr,
+          bedat       TYPE bedat,
+          lifnr	      TYPE elifn,
+          eindt	      TYPE eindt,
+          ct_pogrn    TYPE i,             "PO TO GRN Conversion  TIME (Days)
+          budat_mkpf  TYPE budat,
+          mseg_menge  TYPE menge_d,
+          open_qty    TYPE i,             "Open PO Item Qty.
+          pending_eta TYPE char10,        "Pending Qty delivery
+          remarks     TYPE char70,        "Remarks
+          tech_specs1	TYPE char10,        "Tech Specs./drawing Provide on (Date) (Through Form)
+          tech_specs2 TYPE char10,        "Tech Specs./drawing Approved on (Throgh Form)
+          ct_prpr     TYPE i,             "Ageing Report wrf to PR to Present Date  Conversion days from PR to present date
+
+        END OF ty_final.
+
+DATA : it_final TYPE TABLE OF ty_final,
+       wa_final TYPE ty_final.
+
+DATA: it_fieldcat TYPE lvc_t_fcat,
+      wa_fieldcat TYPE lvc_s_fcat,
+      wa_layout   TYPE lvc_s_layo.
+
+DATA: go_alv       TYPE REF TO cl_gui_alv_grid,
+      go_container TYPE REF TO cl_gui_custom_container.
+
+DATA gv_edit_mode TYPE abap_bool VALUE abap_false.
